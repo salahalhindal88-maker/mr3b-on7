@@ -1,0 +1,113 @@
+{
+    "brokers": {
+        "1412021840133492857": {
+            "totalOperations": 0,
+            "treatment": {
+                "excellent": 0,
+                "good": 0,
+                "bad": 0
+            },
+            "speed": {
+                "excellent": 0,
+                "good": 0,
+                "bad": 0
+            },
+            "history": []
+        },
+        "1475885818470994085": {
+            "totalOperations": 2,
+            "treatment": {
+                "excellent": 2,
+                "good": 0,
+                "bad": 0
+            },
+            "speed": {
+                "excellent": 2,
+                "good": 0,
+                "bad": 0
+            },
+            "history": [
+                {
+                    "owner": "<@478650278258671626>",
+                    "reason": "ticket-839",
+                    "time": "٢٠‏/٨‏/٢٠٢٦، ٨:٠٥:٤٥ م",
+                    "rate": "💬 ممتاز | ⚡ ممتاز"
+                },
+                {
+                    "owner": "<@1539184310056124420>",
+                    "reason": "ticket-839",
+                    "time": "٢٠‏/٨‏/٢٠٢٦، ٨:٠٥:٣٥ م",
+                    "rate": "💬 ممتاز | ⚡ ممتاز"
+                }
+            ]
+        },
+        "1272722175815712873": {
+            "totalOperations": 0,
+            "treatment": {
+                "excellent": 0,
+                "good": 0,
+                "bad": 0
+            },
+            "speed": {
+                "excellent": 0,
+                "good": 0,
+                "bad": 0
+            },
+            "history": []
+        },
+        "966523488842162236": {
+            "totalOperations": 2,
+            "treatment": {
+                "excellent": 2,
+                "good": 0,
+                "bad": 0
+            },
+            "speed": {
+                "excellent": 2,
+                "good": 0,
+                "bad": 0
+            },
+            "history": [
+                {
+                    "owner": "<@1539184310056124420>",
+                    "reason": "ticket-849",
+                    "time": "٢٠‏/٨‏/٢٠٢٦، ٩:٥٥:٠٩ م",
+                    "rate": "💬 ممتاز | ⚡ ممتاز"
+                },
+                {
+                    "owner": "<@1124741330514497617>",
+                    "reason": "ticket-849",
+                    "time": "٢٠‏/٨‏/٢٠٢٦، ٩:٥١:٠٢ م",
+                    "rate": "💬 ممتاز | ⚡ ممتاز"
+                }
+            ]
+        },
+        "1124741330514497617": {
+            "totalOperations": 2,
+            "treatment": {
+                "excellent": 2,
+                "good": 0,
+                "bad": 0
+            },
+            "speed": {
+                "excellent": 2,
+                "good": 0,
+                "bad": 0
+            },
+            "history": [
+                {
+                    "owner": "<@1536316278640214077>",
+                    "reason": "ticket-843",
+                    "time": "٢٠‏/٨‏/٢٠٢٦، ١٠:٠٠:٤٧ م",
+                    "rate": "💬 ممتاز | ⚡ ممتاز"
+                },
+                {
+                    "owner": "<@1491032832192151622>",
+                    "reason": "ticket-843",
+                    "time": "٢٠‏/٨‏/٢٠٢٦، ٩:٥٧:١٨ م",
+                    "rate": "💬 ممتاز | ⚡ ممتاز"
+                }
+            ]
+        }
+    }
+}
