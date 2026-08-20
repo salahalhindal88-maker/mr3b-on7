@@ -1,7 +1,29 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Partials, StringSelectMenuBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
-const config = require('./config.json');
+const fs = require("fs");
+const path = require("path");
 
+let token;
+try {
+  const configPath = path.join(__dirname, "config.json");
+  if (fs.existsSync(configPath)) {
+    const fileContent = fs.readFileSync(configPath, "utf8");
+    if (fileContent.trim().length > 2) {
+      const config = JSON.parse(fileContent);
+      token = config.token;
+    }
+  }
+} catch (error) {
+  console.log("⚠️ تخطي ملف التوكن المحلي.");
+}
+
+// إذا لم يوجد في الملف، جلبه مباشرة من متغيرات Railway
+if (!token) {
+  token = process.env.TOKEN;
+}
+
+// فحص أخير للتأكد من وجود التوكن قبل تسجيل الدخول
+console.log("🔍 حالة التوكن الحالي:", token ? "موجود (طوله: " + token.length + ")" : "❌ غير موجود نهائياً!");
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
