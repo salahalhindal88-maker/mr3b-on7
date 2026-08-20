@@ -1,1 +1,21 @@
+const fs = require("fs");
+const path = require("path");
 
+let token;
+try {
+  const configPath = path.join(__dirname, "config.json");
+  if (fs.existsSync(configPath)) {
+    const fileContent = fs.readFileSync(configPath, "utf8");
+    if (fileContent.trim().length > 0) {
+      const config = JSON.parse(fileContent);
+      token = config.token;
+    }
+  }
+} catch (error) {
+  console.log(" ملف config.json غير صالح أو فارغ، سيتم الاعتماد على متغيرات البيئة.");
+}
+
+// إذا لم يتم العثور على التوكن في الملف، استخدم متغير بيئة Railway
+if (!token) {
+  token = process.env.TOKEN;
+}
