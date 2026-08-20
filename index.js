@@ -23,6 +23,13 @@ if (!token) {
 
 // فحص أخير للتأكد من وجود التوكن قبل تسجيل الدخول
 console.log("🔍 حالة التوكن الحالي:", token ? "موجود (طوله: " + token.length + ")" : "❌ غير موجود نهائياً!");
+// --- تعريفا آمناً لملف الإعدادات حتى لا ينهار البوت ---
+let config = {};
+try {
+  config = require('./config.json');
+} catch (error) {
+  config = {}; 
+}
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
