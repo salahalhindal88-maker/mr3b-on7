@@ -1,35 +1,7 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Partials, StringSelectMenuBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
-const path = require("path");
+const config = require('./config.json');
 
-let token;
-try {
-  const configPath = path.join(__dirname, "config.json");
-  if (fs.existsSync(configPath)) {
-    const fileContent = fs.readFileSync(configPath, "utf8");
-    if (fileContent.trim().length > 2) {
-      const config = JSON.parse(fileContent);
-      token = config.token;
-    }
-  }
-} catch (error) {
-  console.log("⚠️ تخطي ملف التوكن المحلي.");
-}
-
-// إذا لم يوجد في الملف، جلبه مباشرة من متغيرات Railway
-if (!token) {
-  token = process.env.TOKEN;
-}
-
-// فحص أخير للتأكد من وجود التوكن قبل تسجيل الدخول
-console.log("🔍 حالة التوكن الحالي:", token ? "موجود (طوله: " + token.length + ")" : "❌ غير موجود نهائياً!");
-// --- تعريفا آمناً لملف الإعدادات حتى لا ينهار البوت ---
-let config = {};
-try {
-  config = require('./config.json');
-} catch (error) {
-  config = {}; 
-}
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -55,7 +27,7 @@ function getDatabase() {
     }
 }
 
-function saveRatingToDB(brokerId, treatment, speed, ticketOwner = "عضو غير حدد", ticketReason = "لا يوجد سبب") {
+function saveRatingToDB(brokerId, treatment, speed, ticketOwner = "عضو غير محدد", ticketReason = "لا يوجد سبب") {
     const db = getDatabase();
     if (!db.brokers[brokerId]) {
         db.brokers[brokerId] = { 
@@ -111,8 +83,9 @@ function createBrokerEmbed(bData, brokerId, guildIcon) {
         .setDescription(`ملف البيانات والدرجات الشاملة المستخرجة للوسيط المستهدف: <@${brokerId}>`)
         .addFields(
             { name: '💼 إجمالي العمليات الناجحة:', value: `\`${total}\` عملية منفذة ومقيمة`, inline: false },
-            { name: '💬 تقييمات أسلوب التعامل والتعاطي:', value: `🟢 ممتاز: \`${treatExcellent}\` (${treatExPercent}%)\n🟡 جيد: \`${treatGood}\` \n🔴 سيئ: \`${treatBad}\``, inline: true },
-            { name: '⚡ تقييمات سرعة تسليم وإنجاز الصفقات:', value: `🟢 ممتاز: \`${speedExcellent}\` (${speedExPercent}%)\n🟡 جيد: \`${speedGood}\` \n🔴 سيئ: \`${speedBad}\``, inline: true }
+            // ✨ [تم تنظيف وحذف الكلمة المطلوبة فوراً بطلبك الحين لتصبح العبارة منسقة]:
+            { name: '💬 تقييمات أسلوب التعامل:', value: `👑 ممتاز: \`${treatExcellent}\` (${treatExPercent}%)\n🟡 جيد: \`${treatGood}\` \n🔴 سيئ: \`${treatBad}\``, inline: true },
+            { name: '⚡ تقييمات سرعة تسليم وإنجاز الصفقات:', value: `👑 ممتاز: \`${speedExcellent}\` (${speedExPercent}%)\n🟡 جيد: \`${speedGood}\` \n🔴 سيئ: \`${speedBad}\``, inline: true }
         )
         .setTimestamp()
         .setFooter({ text: 'لوحة فحص بيانات الوسطاء المعتمدة', iconURL: guildIcon || undefined });
@@ -198,7 +171,7 @@ client.on('messageCreate', async (message) => {
     }
 
     const msgArgs = currentMsgText.split(/ +/);
-    let commandName = msgArgs ? msgArgs[0].trim() : ''; 
+    let commandName = msgArgs ? msgArgs.trim() : ''; 
 
     if (commandName === 'مساعده') commandName = 'مساعدة';
 
@@ -248,7 +221,7 @@ client.on('messageCreate', async (message) => {
             return;
         }
 
-        const pointsNum = parseInt(msgArgs[1]);
+        const pointsNum = parseInt(msgArgs);
         if (isNaN(pointsNum) || pointsNum <= 0 || !targetMember) {
             const errEmbed = new EmbedBuilder()
                 .setColor('#f1c40f')
@@ -341,20 +314,17 @@ client.on('interactionCreate', async (interaction) => {
         } catch (e) { return interaction.editReply({ content: '❌ حدث خطأ داخلي.' }); }
     }
 
-    // 🔒 [تحديث حاسم لإصلاح مشكلة صورتك بالملي وقفل خطأ المهلة]:
     if (interaction.isStringSelectMenu() && interaction.customId === 'leaderboard_select_broker') {
         try {
-            // 🚨 تحديث فوري وسريع لإمساك وحجز الـ Interaction كخيار آمن لمنع تعليق ديسكورد نهائياً
             await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
-            const selectedValue = interaction.values[0]; 
+            const selectedValue = interaction.values; 
             const brokerId = selectedValue.replace('view_broker_', ''); 
             const db = getDatabase();
             
             const bData = db.brokers[brokerId] || { totalOperations: 0, treatment: { excellent: 0, good: 0, bad: 0 }, speed: { excellent: 0, good: 0, bad: 0 }, history: [] };
             const cleanData = { totalOperations: Math.round(bData?.totalOperations || 0), treatment: { excellent: Math.round(bData?.treatment?.excellent || 0), good: Math.round(bData?.treatment?.good || 0), bad: Math.round(bData?.treatment?.bad || 0) }, speed: { excellent: Math.round(bData?.speed?.excellent || 0), good: Math.round(bData?.speed?.good || 0), bad: Math.round(bData?.speed?.bad || 0) }, history: bData?.history || [] };
             
-            // رد آمن ومحدث بملف الوسيط الإحصائي
             return interaction.editReply({ embeds: [createBrokerEmbed(cleanData, brokerId, interaction.guild.iconURL())] });
         } catch (e) { console.error(e); }
     }
@@ -362,9 +332,9 @@ client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
     const parts = interaction.customId.split('_');
 
-    if (parts[0] === 'secure' && parts[1] === 'vote' && parts[2] === 'init') {
+    if (parts === 'secure' && parts === 'vote' && parts === 'init') {
         try {
-            const idKey = parts[3];
+            const idKey = parts;
             const tData = tempRatings.get(`secure_data_${idKey}`);
             if (!tData) {
                 return interaction.reply({ content: '❌ عذراً، انتهت صلاحية هذه الجلسة التقييمية.', ephemeral: true });
@@ -388,10 +358,10 @@ client.on('interactionCreate', async (interaction) => {
         } catch (e) { console.error(e); }
     }
 
-    if (parts[0] === 'secstep') {
+    if (parts === 'secstep') {
         try {
-            const choice = parts[1];
-            const idKey = parts[2];
+            const choice = parts;
+            const idKey = parts;
             
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`secfinal_${choice}_excellent_${idKey}`).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
@@ -402,11 +372,11 @@ client.on('interactionCreate', async (interaction) => {
         } catch (e) { console.error(e); }
     }
 
-    if (parts[0] === 'secfinal') {
+    if (parts === 'secfinal') {
         try {
-            const treatmentResult = parts[1];
-            const speedResult = parts[2];
-            const idKey = parts[3];
+            const treatmentResult = parts;
+            const speedResult = parts;
+            const idKey = parts;
             
             const tData = tempRatings.get(`secure_data_${idKey}`);
             if (!tData) return interaction.update({ content: '❌ عذراً، انتهت صلاحية الجلسة أثناء الحفظ.', components: [] });
@@ -440,7 +410,7 @@ client.on('interactionCreate', async (interaction) => {
                         { name: '👑 الوسيط المسؤول والمستلم:', value: tData.takenBy, inline: true },
                         { name: '👤 العضو صاحب التقييم:', value: `<@${interaction.user.id}>`, inline: true },
                         { name: '🎫 مسمى قناة العملية الناجحة:', value: `\`${tData.ticketName}\``, inline: true },
-                        { name: '💬 تقييم أسلوب التعامل والتعاطي:', value: `\`${treatArabic}\``, inline: true },
+                        { name: '💬 تقييم أسلوب التعامل:', value: `\`${treatArabic}\``, inline: true },
                         { name: '⚡ تقييم سرعة تسليم وإنجاز الصفقات:', value: `\`${speedArabic}\``, inline: true }
                     )
                     .setTimestamp()
@@ -453,4 +423,4 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-client.login(token);
+client.login(config.token);
