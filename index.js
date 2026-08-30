@@ -423,4 +423,4 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-client.login(config.token);
+client.login("MTUzOTQxMjQ5ODkwNDY1MzkyNA.GpcJn3.KIkwZXZRmgleZ8xLQj5p0BQaxCAKgjdHz3IBRM");
