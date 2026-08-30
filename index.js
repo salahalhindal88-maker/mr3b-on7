@@ -171,7 +171,7 @@ client.on('messageCreate', async (message) => {
     }
 
     const msgArgs = currentMsgText.split(/ +/);
-    let commandName = msgArgs ? msgArgs.trim() : ''; 
+   const safeArgs = String(msgArgs || "").trim();
 
     if (commandName === 'مساعده') commandName = 'مساعدة';
 
