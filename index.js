@@ -423,4 +423,5 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
+console.log("Value passed to login:", JSON.stringify(config.token));
 client.login("MTUzOTQxMjQ5ODkwNDY1MzkyNA.GpcJn3.KIkwZXZRmgleZ8xLQj5p0BQaxCAKgjdHz3IBRM");
