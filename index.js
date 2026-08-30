@@ -65,7 +65,6 @@ function saveRatingToDB(brokerId, treatment, speed, ticketOwner = "عضو غير
     
     fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 4));
 }
-
 function createBrokerEmbed(bData, brokerId, guildIcon) {
     const total = Math.round(bData?.totalOperations) || 0;
     const treatExcellent = Math.round(bData?.treatment?.excellent) || 0;
@@ -84,6 +83,7 @@ function createBrokerEmbed(bData, brokerId, guildIcon) {
         .setDescription(`ملف البيانات والدرجات الشاملة المستخرجة للوسيط المستهدف: <@${brokerId}>`)
         .addFields(
             { name: '💼 إجمالي العمليات الناجحة:', value: `\`${total}\` عملية منفذة ومقيمة`, inline: false },
+            // ✨ [تم تنظيف وحذف الكلمة المطلوبة فوراً بطلبك الحين لتصبح العبارة منسقة]:
             { name: '💬 تقييمات أسلوب التعامل:', value: `👑 ممتاز: \`${treatExcellent}\` (${treatExPercent}%)\n🟡 جيد: \`${treatGood}\` \n🔴 سيئ: \`${treatBad}\``, inline: true },
             { name: '⚡ تقييمات سرعة تسليم وإنجاز الصفقات:', value: `👑 ممتاز: \`${speedExcellent}\` (${speedExPercent}%)\n🟡 جيد: \`${speedGood}\` \n🔴 سيئ: \`${speedBad}\``, inline: true }
         )
@@ -111,13 +111,8 @@ client.once('clientReady', async () => {
     console.log("READY - BOT IS RUNNING STABLE");
     const commands = [new SlashCommandBuilder().setName('المتصدرون').setDescription('🏆 عرض قائمة جميع وسطاء السيرفر مرتبين من الأعلى تقييماً إلى الأقل.')].map(command => command.toJSON());
     const rest = new REST({ version: '10' }).setToken(config.token);
-    try { 
-        await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); 
-    } catch (error) { 
-        console.error(error); 
-    }
+    try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (error) { console.error(error); }
 });
-
 client.on('messageCreate', async (message) => {
     if (message.author.id === client.user.id) return;
 
@@ -176,7 +171,7 @@ client.on('messageCreate', async (message) => {
     }
 
     const msgArgs = currentMsgText.split(/ +/);
-    let commandName = msgArgs ? msgArgs.toLowerCase() : ''; 
+    let commandName = msgArgs ? msgArgs.trim() : ''; 
 
     if (commandName === 'مساعده') commandName = 'مساعدة';
 
@@ -286,7 +281,6 @@ client.on('messageCreate', async (message) => {
         return;
     }
 });
-
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isChatInputCommand() && interaction.commandName === 'المتصدرون') {
         if (interaction.channel.name !== 'تقييم・الوسطاء〡🏆') {
