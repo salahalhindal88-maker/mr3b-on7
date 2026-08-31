@@ -143,7 +143,7 @@ function isCloseMatch(input, target) {
     return editDistance <= 2;
 }
 
-client.once('clientReady', () => {
+client.once('ready', async () => {
     console.log("==========================================");
     console.log("READY - BOT IS RUNNING STABLE");
     console.log(`🌐 إجمالي السيرفرات المتصلة حالياً: [ ${client.guilds.cache.size} سيرفرات ]`);
@@ -151,12 +151,7 @@ client.once('clientReady', () => {
 
     const commands = [new SlashCommandBuilder().setName('المتصدرون').setDescription('🏆 عرض قائمة جميع وسطاء السيرفر مرتبين من الأعلى تقييماً إلى الأقل.')].map(command => command.toJSON());
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-    client.once('clientReady', async () => {
-    try { 
-        await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); 
-    } catch (error) { 
-        console.error(error); 
-    }
+    try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (error) { console.error(error); }
 });
 client.on('messageCreate', async (message) => {
     if (message.author.id === client.user.id) return;
@@ -286,7 +281,8 @@ client.on('messageCreate', async (message) => {
 
     const rawText = message.content.trim();
     const args = rawText.split(/ +/);
-    const lowerInput = String(args || '').toLowerCase();
+    const firstArg = Array.isArray(args) ? (args[0] || '') : String(args || '');
+    const lowerInput = firstArg.toLowerCase();
 
     // 🔒 حظر تشغيل وعمل أوامر التايمر نهائياً خارج روم "توقيت・〡timer⏲️" الجديد بطلبك الصريح كلياً الحين
     if (message.channel.name !== 'توقيت・〡timer%ef%b8%8f') return;
