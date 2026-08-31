@@ -143,7 +143,7 @@ function isCloseMatch(input, target) {
     return editDistance <= 2;
 }
 
-client.once('ready', async () => {
+client.once('clientReady', () => {
     console.log("==========================================");
     console.log("READY - BOT IS RUNNING STABLE");
     console.log(`🌐 إجمالي السيرفرات المتصلة حالياً: [ ${client.guilds.cache.size} سيرفرات ]`);
