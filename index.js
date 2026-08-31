@@ -13,6 +13,7 @@ const client = new Client({
 });
 
 const tempRatings = new Map();
+const activeTimers = new Map(); 
 const DB_PATH = './ratings_database.json';
 
 function getDatabase() {
@@ -83,7 +84,6 @@ function createBrokerEmbed(bData, brokerId, guildIcon) {
         .setDescription(`ملف البيانات والدرجات الشاملة المستخرجة للوسيط المستهدف: <@${brokerId}>`)
         .addFields(
             { name: '💼 إجمالي العمليات الناجحة:', value: `\`${total}\` عملية منفذة ومقيمة`, inline: false },
-            // ✨ [تم تنظيف وحذف الكلمة المطلوبة فوراً بطلبك الحين لتصبح العبارة منسقة]:
             { name: '💬 تقييمات أسلوب التعامل:', value: `👑 ممتاز: \`${treatExcellent}\` (${treatExPercent}%)\n🟡 جيد: \`${treatGood}\` \n🔴 سيئ: \`${treatBad}\``, inline: true },
             { name: '⚡ تقييمات سرعة تسليم وإنجاز الصفقات:', value: `👑 ممتاز: \`${speedExcellent}\` (${speedExPercent}%)\n🟡 جيد: \`${speedGood}\` \n🔴 سيئ: \`${speedBad}\``, inline: true }
         )
@@ -107,8 +107,48 @@ function createBrokerEmbed(bData, brokerId, guildIcon) {
     return embed;
 }
 
-client.once('clientReady', async () => {
+function parseDuration(timeStr) {
+    const regex = /(\d+)\s*(h|m|s|ساعة|دقيقة|ثانية|د|ث)/gi;
+    let totalMs = 0;
+    let match;
+    let hasMatch = false;
+    
+    while ((match = regex.exec(timeStr)) !== null) {
+        hasMatch = true;
+        const value = parseInt(match);
+        const unit = match.toLowerCase();
+        
+        if (unit === 'h' || unit === 'ساعة') totalMs += value * 60 * 60 * 1000;
+        else if (unit === 'm' || unit === 'دقيقة' || unit === 'د') totalMs += value * 60 * 1000;
+        else if (unit === 's' || unit === 'ثانية' || unit === 'ث') totalMs += value * 1000;
+    }
+    
+    if (!hasMatch) {
+        const pureNum = parseInt(timeStr.replace(/\D/g, ''));
+        if (!isNaN(pureNum)) totalMs = pureNum * 60 * 1000;
+    }
+    return totalMs;
+}
+
+function isCloseMatch(input, target) {
+    const s1 = input.toLowerCase();
+    const s2 = target.toLowerCase();
+    if (s1.startsWith(s2) || s2.startsWith(s1)) return true;
+    
+    let editDistance = 0;
+    const maxLen = Math.max(s1.length, s2.length);
+    for (let i = 0; i < maxLen; i++) {
+        if (s1[i] !== s2[i]) editDistance++;
+    }
+    return editDistance <= 2;
+}
+
+client.once('ready', async () => {
+    console.log("==========================================");
     console.log("READY - BOT IS RUNNING STABLE");
+    console.log(`🌐 إجمالي السيرفرات المتصلة حالياً: [ ${client.guilds.cache.size} سيرفرات ]`);
+    console.log("==========================================");
+
     const commands = [new SlashCommandBuilder().setName('المتصدرون').setDescription('🏆 عرض قائمة جميع وسطاء السيرفر مرتبين من الأعلى تقييماً إلى الأقل.')].map(command => command.toJSON());
     const rest = new REST({ version: '10' }).setToken(config.token);
     try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (error) { console.error(error); }
@@ -120,7 +160,6 @@ client.on('messageCreate', async (message) => {
 
     if (currentMsgText === 'تقييم') {
         const chName = message.channel.name.toLowerCase();
-
         if (!chName.startsWith('ticket-')) return;
 
         const blockListRegex = /(كرستال|كريستال|crystal|دعم|فني|support|رتبة|og|rank|role)/i;
@@ -171,15 +210,27 @@ client.on('messageCreate', async (message) => {
     }
 
     const msgArgs = currentMsgText.split(/ +/);
-    let commandName = msgArgs ? msgArgs.trim() : ''; 
+    const commandName = msgArgs; 
 
-    if (commandName === 'مساعده') commandName = 'مساعدة';
-
-    if (commandName === 'زيد' || commandName === 'نقص' || commandName === 'ريسيت' || commandName === 'مساعدة') {
+    if (commandName === 'مساعده' || commandName === 'مساعدة') {
         if (message.channel.name !== 'تقييم・الوسطاء〡🏆') return;
-        if (message.author.username !== 'mrxx0010') {
-            return message.reply({ content: '❌ عذراً، أوامر التحكم بالنقاط مقفلة ومخصصة حصرياً لـ `mrxx0010`!' });
-        }
+        if (message.author.username !== 'mrxx0010') return;
+        const helpEmbed = new EmbedBuilder()
+            .setColor('#101010')
+            .setTitle('💡 دليل رسايل التحكم وإرشادات الإضافة والخصم الصافي:')
+            .setDescription('يمكنك كتابة الأوامر كرسائل عادية بالتنسيق التالي:\n\n' +
+                            `🟢 **زيد [الرقم] [@الوسيط]** ⬅️ لإضافة نقاط صدارة صافية (أو بالرد على رسالته).\n` +
+                            `🔴 **نقص [الرقم] [@الوسيط]** ⬅️ لخصم وتنزيل نقاط الصدارة بقيمة دقيقة.\n` +
+                            `⚡ **ريسيت [@الوسيط]** ⬅️ لتصفير ومسح سجل وسيط فردي وإعادته للـ الصفر.`)
+            .setTimestamp();
+        const helpMsg = await message.reply({ embeds: [helpEmbed] });
+        setTimeout(() => { helpMsg.delete().catch(() => {}); message.delete().catch(() => {}); }, 30000);
+        return;
+    }
+
+    if (commandName === 'زيد' || commandName === 'نقص' || commandName === 'ريسيت') {
+        if (message.channel.name !== 'تقييم・الوسطاء〡🏆') return;
+        if (message.author.username !== 'mrxx0010') return;
 
         let targetMember = message.mentions.members.first();
         if (!targetMember && message.reference) {
@@ -189,96 +240,127 @@ client.on('messageCreate', async (message) => {
             } catch (e) {}
         }
 
-        if (commandName === 'مساعدة') {
-            const helpEmbed = new EmbedBuilder()
-                .setColor('#101010')
-                .setTitle('💡 دليل رسايل التحكم وإرشادات الإضافة والخصم الصافي:')
-                .setDescription('يمكنك كتابة الأوامر كرسائل عادية بالتنسيق التالي:\n\n' +
-                                `🟢 **زيد [الرقم] [@الوسيط]** ⬅️ لإضافة نقاط صدارة صافية (أو بالرد على رسالته).\n` +
-                                `🔴 **نقص [الرقم] [@الوسيط]** ⬅️ لخصم وتنزيل نقاط الصدارة بقيمة دقيقة.\n` +
-                                `⚡ **ريسيت [@الوسيط]** ⬅️ لتصفير ومسح سجل وسيط فردي وإعادته للـ الصفر.`)
-                .setTimestamp();
-
-            const helpMsg = await message.reply({ embeds: [helpEmbed] });
-            setTimeout(() => { helpMsg.delete().catch(() => {}); message.delete().catch(() => {}); }, 30000);
-            return;
-        }
-
         if (commandName === 'ريسيت') {
-            if (!targetMember) {
-                const helpResetEmbed = new EmbedBuilder().setColor('#f1c40f').setTitle('⚠️ خطأ في الصيغة:').setDescription('الصيغة الصحيحة للتصفير الفردي هي: `ريسيت @الوسيط` أو بالرد على رسالته بـ `ريسيت`');
-                const errMsg = await message.reply({ embeds: [helpResetEmbed] });
-                setTimeout(() => { errMsg.delete().catch(() => {}); message.delete().catch(() => {}); }, 30000);
-                return;
-            }
-
+            if (!targetMember) return message.reply({ content: '❌ الصيغة الصحيحة: `ريسيت @الوسيط`' });
             const db = getDatabase();
             db.brokers[targetMember.id] = { totalOperations: 0, treatment: { excellent: 0, good: 0, bad: 0 }, speed: { excellent: 0, good: 0, bad: 0 }, history: [] };
             fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 4));
-
-            const resetSuccessMsg = await message.reply({ content: `⚡ **تم التصفير الفردي بنجاح!** تم مسح سجل الوسيط ${targetMember} بالكامل وإعادته للصفر.` });
-            setTimeout(() => { resetSuccessMsg.delete().catch(() => {}); message.delete().catch(() => {}); }, 30000);
-            return;
+            return message.reply({ content: `⚡ **تم التصفير بنجاح للوسيط:** ${targetMember}` });
         }
 
         const pointsNum = parseInt(msgArgs);
         if (isNaN(pointsNum) || pointsNum <= 0 || !targetMember) {
-            const errEmbed = new EmbedBuilder()
-                .setColor('#f1c40f')
-                .setTitle('⚠️ خطأ في صيغة كتابة الأمر اليدوي:')
-                .setDescription(`يرجى كتابة الأمر النصي العادي بالشكل المظبوط والصافي كالتالي:\n` +
-                                `📝 \`زيد [الرقم] [@منشن الوسيط]\` أو قم بعمل ريبلاي على رسالة الوسيط واكتب \`زيد [الرقم]\``);
-                                
-            const errMsg = await message.reply({ embeds: [errEmbed] });
-            setTimeout(() => { errMsg.delete().catch(() => {}); message.delete().catch(() => {}); }, 30000);
-            return;
+            return message.reply({ content: `❌ الصيغة الصحيحة: \`زيد [الرقم] [@الوسيط]\`` });
         }
 
         const db = getDatabase();
         const brokerId = targetMember.id;
-
         if (!db.brokers[brokerId]) {
             db.brokers[brokerId] = { totalOperations: 0, treatment: { excellent: 0, good: 0, bad: 0 }, speed: { excellent: 0, good: 0, bad: 0 }, history: [] };
         }
 
         const successEmbed = new EmbedBuilder().setTimestamp();
-
         if (commandName === 'زيد') {
             db.brokers[brokerId].totalOperations += 1;
             db.brokers[brokerId].treatment.excellent += (pointsNum / 3);
-            
-            successEmbed
-                .setColor('#2ecc71')
-                .setTitle('✅ تم إضافة النقاط يدوياً بنجاح!')
-                .setDescription(`قام صاحب الحساب المصرح له بزيادة نقاط الصدارة للوسيط المعتمد بنجاح:`)
-                .addFields(
-                    { name: '👑 الوسيط المستهدف:', value: `${targetMember}`, inline: true },
-                    { name: '➕ النقاط المضافة الصافية:', value: `\`+${pointsNum}\` نقطة صدارة`, inline: true }
-                );
+            successEmbed.setColor('#2ecc71').setTitle('✅ تم إضافة النقاط بنجاح!').setDescription(`تمت زيادة نقاط الوسيط ${targetMember} بقيمة \`+${pointsNum}\` نقطة.`);
         } else if (commandName === 'نقص') {
             if (db.brokers[brokerId].totalOperations > 0) db.brokers[brokerId].totalOperations -= 1;
             db.brokers[brokerId].treatment.bad += (pointsNum / 2);
-            
-            successEmbed
-                .setColor('#e74c3c')
-                .setTitle('📉 تم خصم النقاط يدوياً بنجاح!')
-                .setDescription(`قام صاحب الحساب المصرح له بخصم نقاط الصدارة للوسيط المعتمد بنجاح:`)
-                .addFields(
-                    { name: '👑 الوسيط المسؤول:', value: `${targetMember}`, inline: true },
-                    { name: '➖ النقاط المخصومة الصافية:', value: `\`-${pointsNum}\` نقطة صدارة`, inline: true }
-                );
+            successEmbed.setColor('#e74c3c').setTitle('📉 تم خصم النقاط بنجاح!').setDescription(`تم خصم نقاط الوسيط ${targetMember} بقيمة \`-${pointsNum}\` نقطة.`);
         }
 
         fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 4));
-        successEmbed.addFields({ name: '✍️ :المنفذ والمصرح له الكلي', value: `${message.author}`, inline: false });
-        
         const successMsg = await message.reply({ embeds: [successEmbed] });
-        
-        setTimeout(() => {
-            successMsg.delete().catch(() => {});
-            message.delete().catch(() => {});
-        }, 30000);
+        setTimeout(() => { successMsg.delete().catch(() => {}); message.delete().catch(() => {}); }, 30000);
         return;
+    }
+});
+client.on('messageCreate', async (message) => {
+    if (message.author.id === client.user.id) return;
+
+    const rawText = message.content.trim();
+    const args = rawText.split(/ +/);
+    const commandIn = args ? args.toLowerCase() : '';
+
+    // 🔒 حظر تشغيل وعمل أوامر التايمر نهائياً خارج روم "توقيت・〡timer⏲️" الجديد بطلبك الصريح كلياً الحين
+    if (message.channel.name !== 'توقيت・〡timer%ef%b8%8f') return;
+
+    const userTimerKey = `timer_${message.channel.id}_${message.author.id}`;
+
+    if (commandIn === 'stop') {
+        if (activeTimers.has(userTimerKey)) {
+            const timerData = activeTimers.get(userTimerKey);
+            clearTimeout(timerData.timeoutId); 
+            
+            try { await timerData.replyMessage.delete().catch(() => {}); } catch(e) {}
+            activeTimers.delete(userTimerKey);
+
+            const stopEmbed = new EmbedBuilder()
+                .setColor('#e74c3c')
+                .setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL({ dynamic: true }) })
+                .setTitle('🛑 تم إلغاء وإيقاف المؤقت الزمني')
+                .setDescription(`📢 تم بنجاح إنهاء العداد التنازلي الحالي بطلب رسمي من صاحب التايمر: <@${message.author.id}>`)
+                .setTimestamp();
+            return message.reply({ embeds: [stopEmbed] });
+        } else {
+            return message.reply({ content: '❌ عذراً يا غالي، لا يوجد لديك أي مؤقت زمني نشط حالياً داخل هذه القناة لإيقافه!' });
+        }
+    }
+
+    if (commandIn === 'تايم' || commandIn === 'مؤقت' || isCloseMatch(commandIn, 'تايم')) {
+        const durationStr = args.slice(1).join(' ');
+        
+        if (!durationStr) {
+            const errEmbed = new EmbedBuilder()
+                .setColor('#e74c3c')
+                .setTitle('⚠️ خطأ في صيغة تشغيل المؤقت:')
+                .setDescription(`يرجى تحديد الوقت المطلوب بشكل واضح كالتالي:\n📝 \`${commandIn} [الوقت]\` (أمثلة: \`${commandIn} 5m\` أو \`${commandIn} 52s\`)`);
+            return message.reply({ embeds: [errEmbed] });
+        }
+
+        const durationMs = parseDuration(durationStr);
+        if (durationMs <= 0 || durationMs > 24 * 60 * 60 * 1000) {
+            const boundEmbed = new EmbedBuilder()
+                .setColor('#e74c3c')
+                .setTitle('❌ وقت غير صالح أو مبالغ فيه:')
+                .setDescription('يرجى إدخال وقت صحيح يتراوح بين ثانية واحدة و 24 ساعة كحد أقصى.');
+            return message.reply({ embeds: [boundEmbed] });
+        }
+
+        if (activeTimers.has(userTimerKey)) {
+            clearTimeout(activeTimers.get(userTimerKey).timeoutId);
+        }
+
+        const targetTime = Date.now() + durationMs;
+        const endTimeSeconds = Math.floor(targetTime / 1000);
+
+        const timerEmbed = new EmbedBuilder()
+            .setColor('#121212') 
+            .setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL({ dynamic: true }) })
+            .setTitle('⏳ تم تنشيط العداد التنازلي الشامل')
+            .setDescription(`⏱️ **المدة الكلية المطلوبة:** \`${durationStr}\``)
+            .setFooter({ text: 'محرك إدارة الوقت الآلي لسيرفرك' });
+
+        const finalContent = `# ⏳ **الوقت الرقمي المستهدف المستقر:**\n# <t:${endTimeSeconds}:T>\n\n🏁 **ينتهي العداد التنازلي بالثواني حياً الحين:**\n# <t:${endTimeSeconds}:R>`;
+
+        const replyMessage = await message.reply({ content: finalContent, embeds: [timerEmbed] });
+
+        const timeoutId = setTimeout(async () => {
+            try {
+                activeTimers.delete(userTimerKey);
+                const endEmbed = new EmbedBuilder()
+                    .setColor('#e74c3c')
+                    .setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL({ dynamic: true }) })
+                    .setTitle('🏁 انتهى الوقت الكلي للمؤقت!')
+                    .setDescription(`⏱️ **المدة الكلية المنقضية الكلية:** \`${durationStr}\``);
+                
+                await replyMessage.edit({ content: `# 🏁 **00:00:00**\n# **اكتمل المؤقت بنجاح الكلي!**`, embeds: [endEmbed] }).catch(() => {});
+                return message.channel.send({ content: `⏰ | انتهى الوقت الكلي للمؤقت الخاص بك بنجاح يا غالي! <@${message.author.id}>` });
+            } catch (e) {}
+        }, durationMs);
+
+        activeTimers.set(userTimerKey, { timeoutId, replyMessage });
     }
 });
 client.on('interactionCreate', async (interaction) => {
@@ -317,14 +399,9 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isStringSelectMenu() && interaction.customId === 'leaderboard_select_broker') {
         try {
             await interaction.deferReply({ ephemeral: true }).catch(() => {});
-
-            const selectedValue = interaction.values; 
-            const brokerId = selectedValue.replace('view_broker_', ''); 
-            const db = getDatabase();
-            
+            const selectedValue = interaction.values; const brokerId = selectedValue.replace('view_broker_', ''); const db = getDatabase();
             const bData = db.brokers[brokerId] || { totalOperations: 0, treatment: { excellent: 0, good: 0, bad: 0 }, speed: { excellent: 0, good: 0, bad: 0 }, history: [] };
             const cleanData = { totalOperations: Math.round(bData?.totalOperations || 0), treatment: { excellent: Math.round(bData?.treatment?.excellent || 0), good: Math.round(bData?.treatment?.good || 0), bad: Math.round(bData?.treatment?.bad || 0) }, speed: { excellent: Math.round(bData?.speed?.excellent || 0), good: Math.round(bData?.speed?.good || 0), bad: Math.round(bData?.speed?.bad || 0) }, history: bData?.history || [] };
-            
             return interaction.editReply({ embeds: [createBrokerEmbed(cleanData, brokerId, interaction.guild.iconURL())] });
         } catch (e) { console.error(e); }
     }
@@ -336,18 +413,10 @@ client.on('interactionCreate', async (interaction) => {
         try {
             const idKey = parts;
             const tData = tempRatings.get(`secure_data_${idKey}`);
-            if (!tData) {
-                return interaction.reply({ content: '❌ عذراً، انتهت صلاحية هذه الجلسة التقييمية.', ephemeral: true });
-            }
-
-            if (interaction.user.id === tData.brokerId) {
-                return interaction.reply({ content: '❌ عذراً، لا يمكنك تقييم نفسك نهائياً!', ephemeral: true });
-            }
-
+            if (!tData) return interaction.reply({ content: '❌ عذراً، انتهت صلاحية هذه الجلسة التقييمية.', ephemeral: true });
+            if (interaction.user.id === tData.brokerId) return interaction.reply({ content: '❌ عذراً، لا يمكنك تقييم نفسك نهائياً!', ephemeral: true });
             let usersList = tData.votedUsers || [];
-            if (usersList.includes(interaction.user.id)) {
-                return interaction.reply({ content: '❌ عذراً، لقد قمت بتقديم تقييمك للوسيط داخل هذه التذكرة سابقاً!', ephemeral: true });
-            }
+            if (usersList.includes(interaction.user.id)) return interaction.reply({ content: '❌ عذراً، لقد قمت بتقديم تقييمك للوسيط داخل هذه التذكرة سابقاً!', ephemeral: true });
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`secstep_excellent_${idKey}`).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
@@ -360,9 +429,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (parts === 'secstep') {
         try {
-            const choice = parts;
-            const idKey = parts;
-            
+            const choice = parts; const idKey = parts;
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`secfinal_${choice}_excellent_${idKey}`).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId(`secfinal_${choice}_good_${idKey}`).setLabel('جيد 🟡').setStyle(ButtonStyle.Secondary),
@@ -374,17 +441,10 @@ client.on('interactionCreate', async (interaction) => {
 
     if (parts === 'secfinal') {
         try {
-            const treatmentResult = parts;
-            const speedResult = parts;
-            const idKey = parts;
-            
+            const treatmentResult = parts; const speedResult = parts; const idKey = parts;
             const tData = tempRatings.get(`secure_data_${idKey}`);
             if (!tData) return interaction.update({ content: '❌ عذراً، انتهت صلاحية الجلسة أثناء الحفظ.', components: [] });
-
-            if (!tData.votedUsers) tData.votedUsers = [];
-            if (tData.votedUsers.includes(interaction.user.id)) {
-                return interaction.update({ content: '❌ عذراً، لقد قمت بالتصويت مسبقاً!', components: [] });
-            }
+            if (tData.votedUsers.includes(interaction.user.id)) return interaction.update({ content: '❌ عذراً، لقد قمت بالتصويت مسبقاً!', components: [] });
 
             let treatArabic = treatmentResult === 'excellent' ? 'ممتاز' : treatmentResult === 'good' ? 'جيد' : 'سيئ';
             let speedArabic = speedResult === 'excellent' ? 'ممتاز' : speedResult === 'good' ? 'جيد' : 'سيئ';
@@ -395,33 +455,17 @@ client.on('interactionCreate', async (interaction) => {
             tData.votedUsers.push(interaction.user.id);
             tempRatings.set(`secure_data_${idKey}`, tData);
 
-            try {
-                await interaction.channel.send({ content: `📢 | العضو <@${interaction.user.id}> قام بتقديم تقييمه للوسيط داخل هذه التذكرة بنجاح! ✅` });
-            } catch (e) {}
-
+            try { await interaction.channel.send({ content: `📢 | العضو <@${interaction.user.id}> قام بتقديم تقييمه للوسيط داخل هذه التذكرة بنجاح! ✅` }); } catch (e) {}
             tempRatings.delete(`active_${tData.ticketChannelId}`);
 
             const publicEvalChannel = interaction.guild.channels.cache.find(c => c.name.includes('تقييم') && (c.name.includes('الوسطاء' ) || c.name.includes('وسطاء')));
             if (publicEvalChannel) {
-                const publicEmbed = new EmbedBuilder()
-                    .setColor('#2ecc71')
-                    .setTitle('🏆 تم تسجيل ونشر تقييم جديد للعملية الناجحة')
-                    .addFields(
-                        { name: '👑 الوسيط المسؤول والمستلم:', value: tData.takenBy, inline: true },
-                        { name: '👤 العضو صاحب التقييم:', value: `<@${interaction.user.id}>`, inline: true },
-                        { name: '🎫 مسمى قناة العملية الناجحة:', value: `\`${tData.ticketName}\``, inline: true },
-                        { name: '💬 تقييم أسلوب التعامل:', value: `\`${treatArabic}\``, inline: true },
-                        { name: '⚡ تقييم سرعة تسليم وإنجاز الصفقات:', value: `\`${speedArabic}\``, inline: true }
-                    )
-                    .setTimestamp()
-                    .setFooter({ text: 'تقييم الوسطاء المطور والآمن لسيرفرك', iconURL: interaction.guild.iconURL() });
+                const publicEmbed = new EmbedBuilder().setColor('#2ecc71').setTitle('🏆 تم تسجيل ونشر تقييم جديد للعملية الناجحة').addFields({ name: '👑 الوسيط المسؤول والمستلم:', value: tData.takenBy, inline: true }, { name: '👤 العضو صاحب التقييم:', value: `<@${interaction.user.id}>`, inline: true }, { name: '🎫 مسمى قناة العملية الناجحة:', value: `\`${tData.ticketName}\``, inline: true }, { name: '💬 تقييم أسلوب التعامل:', value: `\`${treatArabic}\``, inline: true }, { name: '⚡ تقييم سرعة تسليم وإنجاز الصفقات:', value: `\`${speedArabic}\``, inline: true }).setTimestamp().setFooter({ text: 'تقييم الوسطاء المطور والآمن لسيرفرك', iconURL: interaction.guild.iconURL() });
                 await publicEvalChannel.send({ embeds: [publicEmbed] });
             }
-            
             return interaction.update({ content: '✅ **بيض الله وجهك!** تم إرسال وحفظ مراجعتك بنجاح وعُدلت الإحصائيات الحية بالسجلات!', components: [] });
         } catch (error) { console.error(error); }
     }
 });
 
-console.log("Value passed to login:", JSON.stringify(config.token));
-client.login("MTUzOTQxMjQ5ODkwNDY1MzkyNA.GpcJn3.KIkwZXZRmgleZ8xLQj5p0BQaxCAKgjdHz3IBRM");
+client.login(process.env.TOKEN);
