@@ -151,7 +151,12 @@ client.once('clientReady', () => {
 
     const commands = [new SlashCommandBuilder().setName('المتصدرون').setDescription('🏆 عرض قائمة جميع وسطاء السيرفر مرتبين من الأعلى تقييماً إلى الأقل.')].map(command => command.toJSON());
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-    try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (error) { console.error(error); }
+    client.once('clientReady', async () => {
+    try { 
+        await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); 
+    } catch (error) { 
+        console.error(error); 
+    }
 });
 client.on('messageCreate', async (message) => {
     if (message.author.id === client.user.id) return;
