@@ -408,24 +408,33 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (!interaction.isButton()) return;
-    const parts = interaction.customId.split('_');
 
-    if (parts === 'secure' && parts === 'vote' && parts === 'init') {
-        try {
-            const idKey = parts;
-            const tData = tempRatings.get(`secure_data_${idKey}`);
-            if (!tData) return interaction.reply({ content: '❌ عذراً، انتهت صلاحية هذه الجلسة التقييمية.', ephemeral: true });
-            if (interaction.user.id === tData.brokerId) return interaction.reply({ content: '❌ عذراً، لا يمكنك تقييم نفسك نهائياً!', ephemeral: true });
-            let usersList = tData.votedUsers || [];
-            if (usersList.includes(interaction.user.id)) return interaction.reply({ content: '❌ عذراً، لقد قمت بتقديم تقييمك للوسيط داخل هذه التذكرة سابقاً!', ephemeral: true });
+// 1. تأجيل التفاعل فوراً لمنع خطأ انتهاء الوقت (3 ثواني)
+await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`secstep_excellent_${idKey}`).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId(`secstep_good_${idKey}`).setLabel('جيد 🟡').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`secstep_bad_${idKey}`).setLabel('سيئ 🔴').setStyle(ButtonStyle.Danger)
-            );
-            return interaction.reply({ content: `🎫 **خطوة 1 من 2:** الرجاء تحديد مستوى أسلوب وتعامل الوسيط معك:`, components: [row], ephemeral: true });
-        } catch (e) { console.error(e); }
+const parts = interaction.customId.split('_');
+
+// 2. تصحيح فهارس المصفوفة بالشكل الصحيح
+if (parts === 'secure' && parts === 'vote' && parts === 'init') {
+    try {
+        const idKey = parts; // جلب الـ ID بشكل صحيح من الجزء الرابع
+        const tData = tempRatings.get(`secure_data_${idKey}`);
+        
+        if (!tData) return interaction.editReply({ content: '❌ عذراً، انتهت صلاحية الجلسة التقييمية.' });
+        if (interaction.user.id === tData.brokerId) return interaction.editReply({ content: '❌ عذراً، لا يمكنك تقييم نفسك نهائياً.' });
+        
+        let usersList = tData.votedUsers || [];
+        if (usersList.includes(interaction.user.id)) return interaction.editReply({ content: '❌ عذراً، قمت بتقييمك للوسيط داخل هذه التذكرة سابقاً.' });
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`secstep_excellent_${idKey}`).setLabel('ممتاز (🟢)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`secstep_good_${idKey}`).setLabel('جيد (🟡)').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`secstep_bad_${idKey}`).setLabel('سيئ (🔴)').setStyle(ButtonStyle.Danger)
+        );
+        
+        return interaction.editReply({ content: '⭐ **خطوة 1 من 2:** الرجاء تحديد مستوى أسلوب وتعامل الوسيط معك:', components: [row] });
+    } catch (e) { console.error(e); }
+}
     }
 
     if (parts === 'secstep') {
