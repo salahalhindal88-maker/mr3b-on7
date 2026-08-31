@@ -281,7 +281,8 @@ client.on('messageCreate', async (message) => {
 
     const rawText = message.content.trim();
     const args = rawText.split(/ +/);
-    const commandIn = args ? args.toLowerCase() : '';
+    const safeArgs = Array.isArray(args) ? args.join(' ') : String(args || '');
+    const lowerInput = safeArgs.toLowerCase();
 
     // 🔒 حظر تشغيل وعمل أوامر التايمر نهائياً خارج روم "توقيت・〡timer⏲️" الجديد بطلبك الصريح كلياً الحين
     if (message.channel.name !== 'توقيت・〡timer%ef%b8%8f') return;
