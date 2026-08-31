@@ -465,7 +465,7 @@ if (parts === 'secure' && parts === 'vote' && parts === 'init') {
             tData.votedUsers.push(interaction.user.id);
             tempRatings.set(`secure_data_${idKey}`, tData);
 
-            try { await interaction.channel.send({ content: `📢 | العضو <@${interaction.user.id}> قام بتقديم تقييمه للوسيط داخل هذه التذكرة بنجاح! ✅` }); } catch (e) {}
+            try { await interaction.channel.send({ content: `📢 | العضو <@$ async {interaction.user.id}> قام بتقديم تقييمه للوسيط داخل هذه التذكرة بنجاح! ✅` }); } catch (e) {}
             tempRatings.delete(`active_${tData.ticketChannelId}`);
 
             const publicEvalChannel = interaction.guild.channels.cache.find(c => c.name.includes('تقييم') && (c.name.includes('الوسطاء' ) || c.name.includes('وسطاء')));
