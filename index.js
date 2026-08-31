@@ -435,7 +435,7 @@ if (parts === 'secure' && parts === 'vote' && parts === 'init') {
         return interaction.editReply({ content: '⭐ **خطوة 1 من 2:** الرجاء تحديد مستوى أسلوب وتعامل الوسيط معك:', components: [row] });
     } catch (e) { console.error(e); }
 }
-    }
+    });
 
     if (parts === 'secstep') {
         try {
