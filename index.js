@@ -115,8 +115,8 @@ function parseDuration(timeStr) {
     
     while ((match = regex.exec(timeStr)) !== null) {
         hasMatch = true;
-        const value = parseInt(match);
-        const unit = match.toLowerCase();
+        const value = parseInt(match[1]);
+        const unit = match[2].toLowerCase();
         
         if (unit === 'h' || unit === 'ساعة') totalMs += value * 60 * 60 * 1000;
         else if (unit === 'm' || unit === 'دقيقة' || unit === 'د') totalMs += value * 60 * 1000;
@@ -150,7 +150,7 @@ client.once('ready', async () => {
     console.log("==========================================");
 
     const commands = [new SlashCommandBuilder().setName('المتصدرون').setDescription('🏆 عرض قائمة جميع وسطاء السيرفر مرتبين من الأعلى تقييماً إلى الأقل.')].map(command => command.toJSON());
-    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+    const rest = new REST({ version: '10' }).setToken(config.token);
     try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (error) { console.error(error); }
 });
 client.on('messageCreate', async (message) => {
@@ -181,11 +181,11 @@ client.on('messageCreate', async (message) => {
         const ratingLobbyEmbed = new EmbedBuilder()
             .setColor('#f1c40f')
             .setTitle('⭐️ نظام تقييم عمليات الوسطاء المعتمد')
-            .setDescription(`مرحباً بك عزيزي العضو، يرجى الضغط على الزر الأخضر أدناه لوضع مراجعكتك وتقييمك الصافي للوسيط الحالي: <@${message.author.id}>`)
+            .setDescription(`مرحباً بك عزيزي العضو، يرجى الضتقد على الزر الأخضر أدناه لوضع مراجعكتك وتقييمك الصافي للوسيط الحالي: <@${message.author.id}>`)
             .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`secure_vote_init_${message.id}`).setLabel('تقييم الوسيط').setStyle(ButtonStyle.Success).setEmoji('1537439699386241064')
+            new ButtonBuilder().setCustomId(`secure_vote_init_${message.id}`).setLabel('تقييم الوسيط').setStyle(ButtonStyle.Success)
         );
 
         await message.channel.send({ embeds: [ratingLobbyEmbed], components: [row] });
@@ -210,7 +210,7 @@ client.on('messageCreate', async (message) => {
     }
 
     const msgArgs = currentMsgText.split(/ +/);
-    const commandName = msgArgs; 
+    const commandName = msgArgs[0]; 
 
     if (commandName === 'مساعده' || commandName === 'مساعدة') {
         if (message.channel.name !== 'تقييم・الوسطاء〡🏆') return;
@@ -248,7 +248,7 @@ client.on('messageCreate', async (message) => {
             return message.reply({ content: `⚡ **تم التصفير بنجاح للوسيط:** ${targetMember}` });
         }
 
-        const pointsNum = parseInt(msgArgs);
+        const pointsNum = parseInt(msgArgs[1]);
         if (isNaN(pointsNum) || pointsNum <= 0 || !targetMember) {
             return message.reply({ content: `❌ الصيغة الصحيحة: \`زيد [الرقم] [@الوسيط]\`` });
         }
@@ -281,11 +281,9 @@ client.on('messageCreate', async (message) => {
 
     const rawText = message.content.trim();
     const args = rawText.split(/ +/);
-    const firstArg = Array.isArray(args) ? (args[0] || '') : String(args || '');
-    const lowerInput = firstArg.toLowerCase();
+    const commandIn = args[0] ? args[0].toLowerCase() : '';
 
-    // 🔒 حظر تشغيل وعمل أوامر التايمر نهائياً خارج روم "توقيت・〡timer⏲️" الجديد بطلبك الصريح كلياً الحين
-    if (message.channel.name !== 'توقيت・〡timer%ef%b8%8f') return;
+    if (message.channel.name !== 'توقيت・〡timer⏲️') return;
 
     const userTimerKey = `timer_${message.channel.id}_${message.author.id}`;
 
@@ -400,7 +398,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isStringSelectMenu() && interaction.customId === 'leaderboard_select_broker') {
         try {
             await interaction.deferReply({ ephemeral: true }).catch(() => {});
-            const selectedValue = interaction.values; const brokerId = selectedValue.replace('view_broker_', ''); const db = getDatabase();
+            const selectedValue = interaction.values[0]; const brokerId = selectedValue.replace('view_broker_', ''); const db = getDatabase();
             const bData = db.brokers[brokerId] || { totalOperations: 0, treatment: { excellent: 0, good: 0, bad: 0 }, speed: { excellent: 0, good: 0, bad: 0 }, history: [] };
             const cleanData = { totalOperations: Math.round(bData?.totalOperations || 0), treatment: { excellent: Math.round(bData?.treatment?.excellent || 0), good: Math.round(bData?.treatment?.good || 0), bad: Math.round(bData?.treatment?.bad || 0) }, speed: { excellent: Math.round(bData?.speed?.excellent || 0), good: Math.round(bData?.speed?.good || 0), bad: Math.round(bData?.speed?.bad || 0) }, history: bData?.history || [] };
             return interaction.editReply({ embeds: [createBrokerEmbed(cleanData, brokerId, interaction.guild.iconURL())] });
@@ -408,16 +406,16 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (!interaction.isButton()) return;
-    const parts = interaction.customId.split('_');
+    
+    const customId = interaction.customId;
 
-    if (parts === 'secure' && parts === 'vote' && parts === 'init') {
+    if (customId.startsWith('secure_vote_init_')) {
         try {
-            const idKey = parts;
+            const idKey = customId.replace('secure_vote_init_', '');
             const tData = tempRatings.get(`secure_data_${idKey}`);
             if (!tData) return interaction.reply({ content: '❌ عذراً، انتهت صلاحية هذه الجلسة التقييمية.', ephemeral: true });
             if (interaction.user.id === tData.brokerId) return interaction.reply({ content: '❌ عذراً، لا يمكنك تقييم نفسك نهائياً!', ephemeral: true });
-            let usersList = tData.votedUsers || [];
-            if (usersList.includes(interaction.user.id)) return interaction.reply({ content: '❌ عذراً، لقد قمت بتقديم تقييمك للوسيط داخل هذه التذكرة سابقاً!', ephemeral: true });
+            if (tData.votedUsers.includes(interaction.user.id)) return interaction.reply({ content: '❌ عذراً، لقد قمت بتقديم تقييمك للوسيط داخل هذه التذكرة سابقاً!', ephemeral: true });
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`secstep_excellent_${idKey}`).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
@@ -428,9 +426,13 @@ client.on('interactionCreate', async (interaction) => {
         } catch (e) { console.error(e); }
     }
 
-    if (parts === 'secstep') {
+    // 🔒 [تأمين وحفظ الفهارس الصريحة كلياً ومنع البتر]: تم تثبيت المعرفات بالفهارس [1] و [2] لتعود بالنصوص النظيفة دائماً
+    if (customId.startsWith('secstep_')) {
         try {
-            const choice = parts; const idKey = parts;
+            const parts = customId.split('_');
+            const choice = parts[1]; 
+            const idKey = parts[2];   
+            
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`secfinal_${choice}_excellent_${idKey}`).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId(`secfinal_${choice}_good_${idKey}`).setLabel('جيد 🟡').setStyle(ButtonStyle.Secondary),
@@ -440,9 +442,13 @@ client.on('interactionCreate', async (interaction) => {
         } catch (e) { console.error(e); }
     }
 
-    if (parts === 'secfinal') {
+    if (customId.startsWith('secfinal_')) {
         try {
-            const treatmentResult = parts; const speedResult = parts; const idKey = parts;
+            const parts = customId.split('_');
+            const treatmentResult = parts[1]; 
+            const speedResult = parts[2];     
+            const idKey = parts[3];           
+            
             const tData = tempRatings.get(`secure_data_${idKey}`);
             if (!tData) return interaction.update({ content: '❌ عذراً، انتهت صلاحية الجلسة أثناء الحفظ.', components: [] });
             if (tData.votedUsers.includes(interaction.user.id)) return interaction.update({ content: '❌ عذراً، لقد قمت بالتصويت مسبقاً!', components: [] });
@@ -469,4 +475,4 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-client.login(process.env.TOKEN);
+client.login(config.token);
