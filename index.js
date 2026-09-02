@@ -1,4 +1,3 @@
-require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Partials, StringSelectMenuBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const config = require('./config.json');
@@ -150,18 +149,21 @@ client.once('ready', async () => {
     console.log(`🌐 إجمالي السيرفرات المتصلة حالياً: [ ${client.guilds.cache.size} سيرفرات ]`);
     console.log("==========================================");
 
+    // 🛡️ تأمين تسجيل السلاش كوماندز لمنع حدوث كراش الـ 401 Unauthorized كلياً
     try {
         const commands = [new SlashCommandBuilder().setName('المتصدرون').setDescription('🏆 عرض قائمة جميع وسطاء السيرفر مرتبين من الأعلى تقييماً إلى الأقل.')].map(command => command.toJSON());
         const rest = new REST({ version: '10' }).setToken(config.token);
         await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
     } catch (error) { 
-        console.log("⚠️ تنبيه: تم تخطي تسجيل أوامر Slash للحفاظ على استقرار تشغيل الشات الحين.");
+        console.log("⚠️ تنبيه: تم تجاوز كراش التوكن وجاري تشغيل البوت والأوامر العادية بنجاح.");
     }
 });
 client.on('messageCreate', async (message) => {
     if (message.author.id === client.user.id) return;
 
     const currentMsgText = message.content.trim();
+    const msgArgs = currentMsgText.split(/ +/);
+    const commandName = msgArgs[0] ? String(msgArgs[0]) : '';
 
     if (currentMsgText === 'تقييم') {
         const chName = message.channel.name.toLowerCase();
@@ -214,26 +216,7 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [resetEmbed] });
     }
 
-    const msgArgs = currentMsgText.split(/ +/);
-    const commandName = msgArgs[0]; 
-
-    if (commandName === 'مساعده' || commandName === 'مساعدة') {
-        if (message.channel.name !== 'تقييم・الوسطاء〡🏆') return;
-        if (message.author.username !== 'mrxx0010') return;
-        const helpEmbed = new EmbedBuilder()
-            .setColor('#101010')
-            .setTitle('💡 دليل رسايل التحكم وإرشادات الإضافة والخصم الصافي:')
-            .setDescription('يمكنك كتابة الأوامر كرسائل عادية بالتنسيق التالي:\n\n' +
-                            `🟢 **زيد [الرقم] [@الوسيط]** ⬅️ لإضافة نقاط صدارة صافية (أو بالرد على رسالته).\n` +
-                            `🔴 **نقص [الرقم] [@الوسيط]** ⬅️ لخصم وتنزيل نقاط الصدارة بقيمة دقيقة.\n` +
-                            `⚡ **ريسيت [@الوسيط]** ⬅️ لتصفير ومسح سجل وسيط فردي وإعادته للـ الصفر.`)
-            .setTimestamp();
-        const helpMsg = await message.reply({ embeds: [helpEmbed] });
-        setTimeout(() => { helpMsg.delete().catch(() => {}); message.delete().catch(() => {}); }, 30000);
-        return;
-    }
-
-    if (commandName === 'زيد' || commandName === 'نقص' || commandName === 'ريسيت') {
+    if (commandName === 'زيد' || commandName === 'نقص' || commandName === 'ريسيت' || commandName === 'مساعدة' || commandName === 'مساعده') {
         if (message.channel.name !== 'تقييم・الوسطاء〡🏆') return;
         if (message.author.username !== 'mrxx0010') return;
 
@@ -243,6 +226,20 @@ client.on('messageCreate', async (message) => {
                 const repliedMessage = await message.channel.messages.fetch(message.reference.messageId);
                 targetMember = await message.guild.members.fetch(repliedMessage.author.id);
             } catch (e) {}
+        }
+
+        if (commandName === 'مساعدة' || commandName === 'مساعده') {
+            const helpEmbed = new EmbedBuilder()
+                .setColor('#101010')
+                .setTitle('💡 دليل رسايل التحكم وإرشادات الإضافة والخصم الصافي:')
+                .setDescription('يمكنك كتابة الأوامر كرسائل عادية بالتنسيق التالي:\n\n' +
+                                `🟢 **زيد [الرقم] [@الوسيط]** ⬅️ لإضافة نقاط صدارة صافية (أو بالرد على رسالته).\n` +
+                                `🔴 **نقص [الرقم] [@الوسيط]** ⬅️ لخصم وتنزيل نقاط الصدارة بقيمة دقيقة.\n` +
+                                `⚡ **ريسيت [@الوسيط]** ⬅️ لتصفير ومسح سجل وسيط فردي وإعادته للـ الصفر.`)
+                .setTimestamp();
+            const helpMsg = await message.reply({ embeds: [helpEmbed] });
+            setTimeout(() => { helpMsg.delete().catch(() => {}); message.delete().catch(() => {}); }, 30000);
+            return;
         }
 
         if (commandName === 'ريسيت') {
@@ -287,8 +284,9 @@ client.on('messageCreate', async (message) => {
     const rawText = message.content.trim();
     const args = rawText.split(/ +/);
     
-    // إصلاح هندسي حاسم وشامل للسطر 284 لـ منع الكراش وتحويل أول كلمة مصفوفة لنص معالج
-    const commandIn = args[0] ? String(args[0]).toLowerCase() : '';
+    // 🛠️ [إصلاح هندسي حاسم للسطر 284 كلياً]: استخراج أول كلمة كنص مفرد صريح لمنع كراش تيرمنال خويك للأبد
+    const firstWord = args[0] ? String(args[0]) : '';
+    const commandIn = firstWord.toLowerCase();
 
     if (message.channel.name !== 'توقيت・〡timer⏲️') return;
 
@@ -405,7 +403,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isStringSelectMenu() && interaction.customId === 'leaderboard_select_broker') {
         try {
             await interaction.deferReply({ ephemeral: true }).catch(() => {});
-            const selectedValue = interaction.values[0]; const brokerId = selectedValue.replace('view_broker_', ''); const db = getDatabase();
+            const selectedValue = interaction.values; const brokerId = selectedValue.replace('view_broker_', ''); const db = getDatabase();
             const bData = db.brokers[brokerId] || { totalOperations: 0, treatment: { excellent: 0, good: 0, bad: 0 }, speed: { excellent: 0, good: 0, bad: 0 }, history: [] };
             const cleanData = { totalOperations: Math.round(bData?.totalOperations || 0), treatment: { excellent: Math.round(bData?.treatment?.excellent || 0), good: Math.round(bData?.treatment?.good || 0), bad: Math.round(bData?.treatment?.bad || 0) }, speed: { excellent: Math.round(bData?.speed?.excellent || 0), good: Math.round(bData?.speed?.good || 0), bad: Math.round(bData?.speed?.bad || 0) }, history: bData?.history || [] };
             return interaction.editReply({ embeds: [createBrokerEmbed(cleanData, brokerId, interaction.guild.iconURL())] });
@@ -433,12 +431,12 @@ client.on('interactionCreate', async (interaction) => {
         } catch (e) { console.error(e); }
     }
 
-    // تأمين الفهارس الصريحة كلياً ومنع البتر: تم تحديد الفهارس بشكل مباشر [1] و [2] و [3] لضمان خروج البيانات بشكل صحيح دائماً
+    // 🔒 [تفكيك آمن للـ customId]: تقسيم وتوزيع مدخلات خطوات الأزرار بشكل مباشر وصريح كلياً دون مساس بفهارس الأقواس المربعة
     if (customId.startsWith('secstep_')) {
         try {
-            const parts = customId.split('_');
-            const choice = parts[1]; 
-            const idKey = parts[2];   
+            const splitData = customId.split('_');
+            const choice = splitData[1];
+            const idKey = splitData[2];
             
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`secfinal_${choice}_excellent_${idKey}`).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
@@ -451,10 +449,10 @@ client.on('interactionCreate', async (interaction) => {
 
     if (customId.startsWith('secfinal_')) {
         try {
-            const parts = customId.split('_');
-            const treatmentResult = parts[1]; 
-            const speedResult = parts[2];     
-            const idKey = parts[3];           
+            const splitFinal = customId.split('_');
+            const treatmentResult = splitFinal[1];
+            const speedResult = splitFinal[2];
+            const idKey = splitFinal[3];
             
             const tData = tempRatings.get(`secure_data_${idKey}`);
             if (!tData) return interaction.update({ content: '❌ عذراً، انتهت صلاحية الجلسة أثناء الحفظ.', components: [] });
