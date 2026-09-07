@@ -1,4 +1,3 @@
-const { MessageFlags } = require('discord.js');
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Partials, StringSelectMenuBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const config = require('./config.json');
@@ -354,7 +353,7 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.channel.name !== 'تقييم・الوسطاء〡🏆') {
             return interaction.reply({ content: '❌ عذراً، هذا الأمر مخصص للاستخدام فقط داخل روم التقييمات المعتمد!', ephemeral: true });
         }
-        await interaction.reply({ content: '...', flags: [MessageFlags.Ephemeral] });
+        await interaction.deferReply({ ephemeral: false }); 
         const db = getDatabase(); const selectOptions = []; const finalBrokersList = new Map();
         try {
             const allMembers = await interaction.guild.members.fetch();
@@ -385,7 +384,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isStringSelectMenu() && interaction.customId === 'leaderboard_select_broker') {
         try {
-            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+            await interaction.deferReply({ ephemeral: true }).catch(() => {});
             const selectedValue = String(interaction.values.slice(0, 1)); 
             const brokerId = selectedValue.replace('view_broker_', ''); const db = getDatabase();
             const bData = db.brokers[brokerId] || { totalOperations: 0, treatment: { excellent: 0, good: 0, bad: 0 }, speed: { excellent: 0, good: 0, bad: 0 }, history: [] };
