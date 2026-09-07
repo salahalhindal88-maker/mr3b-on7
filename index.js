@@ -1,4 +1,3 @@
-require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Partials, StringSelectMenuBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const config = require('./config.json');
@@ -28,7 +27,6 @@ function getDatabase() {
         return { brokers: {} }; 
     }
 }
-
 function saveRatingToDB(brokerId, treatment, speed, ticketOwner = "عضو غير محدد", ticketReason = "لا يوجد سبب") {
     const db = getDatabase();
     if (!db.brokers[brokerId]) {
@@ -67,6 +65,21 @@ function saveRatingToDB(brokerId, treatment, speed, ticketOwner = "عضو غير
     
     fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 4));
 }
+
+client.once('ready', async () => {
+    console.log("==========================================");
+    console.log("READY - BOT IS RUNNING STABLE");
+    console.log(`🌐 إجمالي السيرفرات المتصلة حالياً: [ ${client.guilds.cache.size} سيرفرات ]`);
+    console.log("==========================================");
+
+    try {
+        const commands = [new SlashCommandBuilder().setName('المتصدرون').setDescription('🏆 عرض قائمة جميع وسطاء السيرفر مرتبين من الأعلى تقييماً إلى الأقل.')].map(command => command.toJSON());
+        const rest = new REST({ version: '10' }).setToken(config.token);
+        await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+    } catch (error) { 
+        console.log("⚠️ تنبيه: جاري تشغيل البوت والأوامر العادية بنجاح.");
+    }
+});
 function createBrokerEmbed(bData, brokerId, guildIcon) {
     const total = Math.round(bData?.totalOperations) || 0;
     const treatExcellent = Math.round(bData?.treatment?.excellent) || 0;
@@ -109,24 +122,18 @@ function createBrokerEmbed(bData, brokerId, guildIcon) {
 }
 
 function parseDuration(timeStr) {
-    const regex = /(\d+)\s*(h|m|s|ساعة|دقيقة|ثانية|د|ث)/gi;
+    const pureNum = parseInt(timeStr.replace(/\D/g, ''));
     let totalMs = 0;
-    let match;
-    let hasMatch = false;
-    
-    while ((match = regex.exec(timeStr)) !== null) {
-        hasMatch = true;
-        const value = parseInt(match);
-        const unit = match.toLowerCase();
-        
-        if (unit === 'h' || unit === 'ساعة') totalMs += value * 60 * 60 * 1000;
-        else if (unit === 'm' || unit === 'دقيقة' || unit === 'د') totalMs += value * 60 * 1000;
-        else if (unit === 's' || unit === 'ثانية' || unit === 'ث') totalMs += value * 1000;
-    }
-    
-    if (!hasMatch) {
-        const pureNum = parseInt(timeStr.replace(/\D/g, ''));
-        if (!isNaN(pureNum)) totalMs = pureNum * 60 * 1000;
+    if (isNaN(pureNum)) return 0;
+
+    if (timeStr.includes('h') || timeStr.includes('ساعة')) {
+        totalMs = pureNum * 60 * 60 * 1000;
+    } else if (timeStr.includes('m') || timeStr.includes('دقيقة') || timeStr.includes('د')) {
+        totalMs = pureNum * 60 * 1000;
+    } else if (timeStr.includes('s') || timeStr.includes('ثانية') || timeStr.includes('ث')) {
+        totalMs = pureNum * 1000;
+    } else {
+        totalMs = pureNum * 60 * 1000;
     }
     return totalMs;
 }
@@ -134,37 +141,12 @@ function parseDuration(timeStr) {
 function isCloseMatch(input, target) {
     const s1 = input.toLowerCase();
     const s2 = target.toLowerCase();
-    if (s1.startsWith(s2) || s2.startsWith(s1)) return true;
-    
-    let editDistance = 0;
-    const maxLen = Math.max(s1.length, s2.length);
-    for (let i = 0; i < maxLen; i++) {
-        if (s1[i] !== s2[i]) editDistance++;
-    }
-    return editDistance <= 2;
+    return s1.startsWith(s2) || s2.startsWith(s1);
 }
-
-client.once('ready', async () => {
-    console.log("==========================================");
-    console.log("READY - BOT IS RUNNING STABLE");
-    console.log(`🌐 إجمالي السيرفرات المتصلة حالياً: [ ${client.guilds.cache.size} سيرفرات ]`);
-    console.log("==========================================");
-
-    // 🛡️ تأمين تسجيل السلاش كوماندز لمنع حدوث كراش الـ 401 Unauthorized كلياً
-    try {
-        const commands = [new SlashCommandBuilder().setName('المتصدرون').setDescription('🏆 عرض قائمة جميع وسطاء السيرفر مرتبين من الأعلى تقييماً إلى الأقل.')].map(command => command.toJSON());
-        const rest = new REST({ version: '10' }).setToken(config.token);
-        await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    } catch (error) { 
-        console.log("⚠️ تنبيه: تم تجاوز كراش التوكن وجاري تشغيل البوت والأوامر العادية بنجاح.");
-    }
-});
 client.on('messageCreate', async (message) => {
     if (message.author.id === client.user.id) return;
 
     const currentMsgText = message.content.trim();
-    const msgArgs = currentMsgText.split(/ +/);
-    const commandName = msgArgs[0] ? String(msgArgs[0]) : '';
 
     if (currentMsgText === 'تقييم') {
         const chName = message.channel.name.toLowerCase();
@@ -192,8 +174,9 @@ client.on('messageCreate', async (message) => {
             .setDescription(`مرحباً بك عزيزي العضو، يرجى الضغط على الزر الأخضر أدناه لوضع مراجعكتك وتقييمك الصافي للوسيط الحالي: <@${message.author.id}>`)
             .setTimestamp();
 
+        // 💰 إعادة إيموجي كيس المال الفخم بمعرفه الصافي للزر دون كراش
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`secure_vote_init_${message.id}`).setLabel('تقييم الوسيط').setStyle(ButtonStyle.Success)
+            new ButtonBuilder().setCustomId("secure_vote_init_" + message.id).setLabel('تقييم الوسيط').setStyle(ButtonStyle.Success).setEmoji("1537439699386241064")
         );
 
         await message.channel.send({ embeds: [ratingLobbyEmbed], components: [row] });
@@ -217,9 +200,13 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [resetEmbed] });
     }
 
-    if (commandName === 'زيد' || commandName === 'نقص' || commandName === 'ريسيت' || commandName === 'مساعدة' || commandName === 'مساعده') {
+    const lowerText = currentMsgText.toLowerCase();
+    if (lowerText.startsWith('زيد ') || lowerText.startsWith('نقص ') || lowerText.startsWith('ريسيت ')) {
         if (message.channel.name !== 'تقييم・الوسطاء〡🏆') return;
         if (message.author.username !== 'mrxx0010') return;
+
+        const msgArgs = currentMsgText.split(/ +/);
+        const commandName = msgArgs.shift().toLowerCase();
 
         let targetMember = message.mentions.members.first();
         if (!targetMember && message.reference) {
@@ -227,20 +214,6 @@ client.on('messageCreate', async (message) => {
                 const repliedMessage = await message.channel.messages.fetch(message.reference.messageId);
                 targetMember = await message.guild.members.fetch(repliedMessage.author.id);
             } catch (e) {}
-        }
-
-        if (commandName === 'مساعدة' || commandName === 'مساعده') {
-            const helpEmbed = new EmbedBuilder()
-                .setColor('#101010')
-                .setTitle('💡 دليل رسايل التحكم وإرشادات الإضافة والخصم الصافي:')
-                .setDescription('يمكنك كتابة الأوامر كرسائل عادية بالتنسيق التالي:\n\n' +
-                                `🟢 **زيد [الرقم] [@الوسيط]** ⬅️ لإضافة نقاط صدارة صافية (أو بالرد على رسالته).\n` +
-                                `🔴 **نقص [الرقم] [@الوسيط]** ⬅️ لخصم وتنزيل نقاط الصدارة بقيمة دقيقة.\n` +
-                                `⚡ **ريسيت [@الوسيط]** ⬅️ لتصفير ومسح سجل وسيط فردي وإعادته للـ الصفر.`)
-                .setTimestamp();
-            const helpMsg = await message.reply({ embeds: [helpEmbed] });
-            setTimeout(() => { helpMsg.delete().catch(() => {}); message.delete().catch(() => {}); }, 30000);
-            return;
         }
 
         if (commandName === 'ريسيت') {
@@ -251,9 +224,9 @@ client.on('messageCreate', async (message) => {
             return message.reply({ content: `⚡ **تم التصفير بنجاح للوسيط:** ${targetMember}` });
         }
 
-        const pointsNum = parseInt(msgArgs[1]);
+        const pointsNum = parseInt(msgArgs.shift() || "0");
         if (isNaN(pointsNum) || pointsNum <= 0 || !targetMember) {
-            return message.reply({ content: `❌ الصيغة الصحيحة: \`زيد [الرقم] [@الوسيط]\`` });
+            return message.reply({ content: `❌ الصيغة الصحيحة: \`${commandName} [الرقم] [@الوسيط]\`` });
         }
 
         const db = getDatabase();
@@ -283,13 +256,23 @@ client.on('messageCreate', async (message) => {
     if (message.author.id === client.user.id) return;
 
     const rawText = message.content.trim();
-    const args = rawText.split(/ +/);
-    
-    // 🛠️ [إصلاح هندسي حاسم للسطر 284 كلياً]: استخراج أول كلمة كنص مفرد صريح لمنع كراش تيرمنال خويك للأبد
-    const firstWord = args[0] ? String(args[0]) : '';
-    const commandIn = firstWord.toLowerCase();
-
     if (message.channel.name !== 'توقيت・〡timer⏲️') return;
+
+    const lowerStr = rawText.toLowerCase();
+    let commandIn = "";
+    let durationStr = "";
+
+    if (lowerStr.startsWith('تايم ')) {
+        commandIn = "تايم";
+        durationStr = rawText.slice(5).trim();
+    } else if (lowerStr.startsWith('مؤقت ')) {
+        commandIn = "مؤقت";
+        durationStr = rawText.slice(5).trim();
+    } else if (lowerStr === 'stop') {
+        commandIn = "stop";
+    } else {
+        return;
+    }
 
     const userTimerKey = `timer_${message.channel.id}_${message.author.id}`;
 
@@ -297,7 +280,6 @@ client.on('messageCreate', async (message) => {
         if (activeTimers.has(userTimerKey)) {
             const timerData = activeTimers.get(userTimerKey);
             clearTimeout(timerData.timeoutId); 
-            
             try { await timerData.replyMessage.delete().catch(() => {}); } catch(e) {}
             activeTimers.delete(userTimerKey);
 
@@ -313,14 +295,12 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    if (commandIn === 'تايم' || commandIn === 'مؤقت' || isCloseMatch(commandIn, 'تايم')) {
-        const durationStr = args.slice(1).join(' ');
-        
+    if (commandIn === 'تايم' || commandIn === 'مؤقت') {
         if (!durationStr) {
             const errEmbed = new EmbedBuilder()
                 .setColor('#e74c3c')
                 .setTitle('⚠️ خطأ في صيغة تشغيل المؤقت:')
-                .setDescription(`يرجى تحديد الوقت المطلوب بشكل واضح كالتالي:\n📝 \`${commandIn} [الوقت]\` (أمثلة: \`${commandIn} 5m\` أو \`${commandIn} 52s\`)`);
+                .setDescription(`يرجى تحديد الوقت المطلوب بشكل واضح كالتالي:\n📝 \`${commandIn} [الوقت]\` (أمثلة: \`${commandIn} 5m\` أو \`${commandIn} 2m\`)`);
             return message.reply({ embeds: [errEmbed] });
         }
 
@@ -384,8 +364,9 @@ client.on('interactionCreate', async (interaction) => {
             Object.keys(db.brokers).forEach(id => {
                 const b = db.brokers[id]; 
                 const calculatedScore = Math.round(((b?.treatment?.excellent || 0) + (b?.speed?.excellent || 0)) * 3 + ((b?.treatment?.good || 0) + (b?.speed?.good || 0)) * 1 - ((b?.treatment?.bad || 0) + (b?.speed?.bad || 0)) * 2);
-                if (finalBrokersList.has(id)) { const existing = finalBrokersList.get(id); existing.score = calculatedScore; existing.total = Math.round(b?.totalOperations || 0); }
-                else { finalBrokersList.set(id, { id: id, score: calculatedScore, total: Math.round(b?.totalOperations || 0), name: `عضو مغادر/بدون رتبة` }); }
+                const exStr = String(id);
+                if (finalBrokersList.has(exStr)) { const existing = finalBrokersList.get(exStr); existing.score = calculatedScore; existing.total = Math.round(b?.totalOperations || 0); }
+                else { finalBrokersList.set(exStr, { id: exStr, score: calculatedScore, total: Math.round(b?.totalOperations || 0), name: `عضو مغادر/بدون رتبة` }); }
             });
             const sortedBrokers = Array.from(finalBrokersList.values()).sort((a, b) => b.score - a.score);
             if (sortedBrokers.length === 0) return interaction.editReply({ content: '❌ لم يتم العثور على أي وسطاء لبناء اللوحة!' });
@@ -394,7 +375,7 @@ client.on('interactionCreate', async (interaction) => {
             for (let i = 0; i < sortedBrokers.length; i++) {
                 const item = sortedBrokers[i]; let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '👤';
                 leaderboardText += `${medal} **المركز ${i+1}:** <@${item.id}> \n └ العمليات: \`${item.total}\` | النقاط الكلية: \`${item.score}\`\n\n`;
-                selectOptions.push({ label: item.name.slice(0, 25), description: `المركز ${i+1} | النقاط: ${item.score}`, value: `view_broker_${item.id}` });
+                selectOptions.push({ label: item.name.slice(0, 25), description: `المركز ${i+1} | النقاط: ${item.score}`, value: `view_broker_` + item.id });
             }
             leaderboardEmbed.addFields({ name: '📊 لستة الوسطاء مرتبة بالكامل:', value: leaderboardText || 'لا يوجد وسطاء مسجلين' });
             return interaction.editReply({ embeds: [leaderboardEmbed], components: [new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('leaderboard_select_broker').setPlaceholder('🎯 اضغط هنا واختـر الوسيط لعرض كافة تقييماته...').addOptions(selectOptions.slice(0, 25)))] });
@@ -404,7 +385,8 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isStringSelectMenu() && interaction.customId === 'leaderboard_select_broker') {
         try {
             await interaction.deferReply({ ephemeral: true }).catch(() => {});
-            const selectedValue = interaction.values; const brokerId = selectedValue.replace('view_broker_', ''); const db = getDatabase();
+            const selectedValue = String(interaction.values.slice(0, 1)); 
+            const brokerId = selectedValue.replace('view_broker_', ''); const db = getDatabase();
             const bData = db.brokers[brokerId] || { totalOperations: 0, treatment: { excellent: 0, good: 0, bad: 0 }, speed: { excellent: 0, good: 0, bad: 0 }, history: [] };
             const cleanData = { totalOperations: Math.round(bData?.totalOperations || 0), treatment: { excellent: Math.round(bData?.treatment?.excellent || 0), good: Math.round(bData?.treatment?.good || 0), bad: Math.round(bData?.treatment?.bad || 0) }, speed: { excellent: Math.round(bData?.speed?.excellent || 0), good: Math.round(bData?.speed?.good || 0), bad: Math.round(bData?.speed?.bad || 0) }, history: bData?.history || [] };
             return interaction.editReply({ embeds: [createBrokerEmbed(cleanData, brokerId, interaction.guild.iconURL())] });
@@ -412,7 +394,6 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (!interaction.isButton()) return;
-    
     const customId = interaction.customId;
 
     if (customId.startsWith('secure_vote_init_')) {
@@ -424,25 +405,26 @@ client.on('interactionCreate', async (interaction) => {
             if (tData.votedUsers.includes(interaction.user.id)) return interaction.reply({ content: '❌ عذراً، لقد قمت بتقديم تقييمك للوسيط داخل هذه التذكرة سابقاً!', ephemeral: true });
 
             const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`secstep_excellent_${idKey}`).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId(`secstep_good_${idKey}`).setLabel('جيد 🟡').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`secstep_bad_${idKey}`).setLabel('سيئ 🔴').setStyle(ButtonStyle.Danger)
+                new ButtonBuilder().setCustomId("secstep_excellent_" + idKey).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId("secstep_good_" + idKey).setLabel('جيد 🟡').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId("secstep_bad_" + idKey).setLabel('سيئ 🔴').setStyle(ButtonStyle.Danger)
             );
             return interaction.reply({ content: `🎫 **خطوة 1 من 2:** الرجاء تحديد مستوى أسلوب وتعامل الوسيط معك:`, components: [row], ephemeral: true });
         } catch (e) { console.error(e); }
     }
 
-    // 🔒 [تفكيك آمن للـ customId]: تقسيم وتوزيع مدخلات خطوات الأزرار بشكل مباشر وصريح كلياً دون مساس بفهارس الأقواس المربعة
+    // 🔥 [التفكيك النصي الفولاذي البديل الخالي من الأقواس المربعة لضمان عدم البتر نهائياً]:
     if (customId.startsWith('secstep_')) {
         try {
-            const splitData = customId.split('_');
-            const choice = splitData[1];
-            const idKey = splitData[2];
+            const cleanText = customId.replace('secstep_', '');
+            const firstUnderscore = cleanText.indexOf('_');
+            const choice = cleanText.slice(0, firstUnderscore);
+            const idKey = cleanText.slice(firstUnderscore + 1);
             
             const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`secfinal_${choice}_excellent_${idKey}`).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId(`secfinal_${choice}_good_${idKey}`).setLabel('جيد 🟡').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`secfinal_${choice}_bad_${idKey}`).setLabel('سيئ 🔴').setStyle(ButtonStyle.Danger)
+                new ButtonBuilder().setCustomId("secfinal_" + choice + "_excellent_" + idKey).setLabel('ممتاز 🟢').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId("secfinal_" + choice + "_good_" + idKey).setLabel('جيد 🟡').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId("secfinal_" + choice + "_bad_" + idKey).setLabel('سيئ 🔴').setStyle(ButtonStyle.Danger)
             );
             return interaction.update({ content: `⚡ **خطوة 2 من 2:** الرجاء تحديد مستوى سرعة إنجاز وتسليم الوسيط للصفقة:`, components: [row] });
         } catch (e) { console.error(e); }
@@ -450,10 +432,14 @@ client.on('interactionCreate', async (interaction) => {
 
     if (customId.startsWith('secfinal_')) {
         try {
-            const splitFinal = customId.split('_');
-            const treatmentResult = splitFinal[1];
-            const speedResult = splitFinal[2];
-            const idKey = splitFinal[3];
+            const cleanFinal = customId.replace('secfinal_', '');
+            const firstUnder = cleanFinal.indexOf('_');
+            const treatmentResult = cleanFinal.slice(0, firstUnder);
+            const restText = cleanFinal.slice(firstUnder + 1);
+            
+            const secondUnder = restText.indexOf('_');
+            const speedResult = restText.slice(0, secondUnder);
+            const idKey = restText.slice(secondUnder + 1);
             
             const tData = tempRatings.get(`secure_data_${idKey}`);
             if (!tData) return interaction.update({ content: '❌ عذراً، انتهت صلاحية الجلسة أثناء الحفظ.', components: [] });
@@ -481,4 +467,4 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(config.token);
