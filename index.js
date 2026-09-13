@@ -336,18 +336,6 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Partials, StringSelectMenuBuilder, REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const fs = require('fs');
-const config = require('./config.json');
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
-    ],
-    partials: [Partials.Message, Partials.Channel, Partials.User]
-});
 const tempRatings = new Map();
 const activeTimers = new Map(); 
 const tournamentMatches = new Map();
