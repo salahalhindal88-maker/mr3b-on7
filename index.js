@@ -336,23 +336,6 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-const tempRatings = new Map();
-const activeTimers = new Map(); 
-const tournamentMatches = new Map();
-const DB_PATH = './ratings_database.json';
-function getDatabase() {
-    if (!fs.existsSync(DB_PATH)) {
-        fs.writeFileSync(DB_PATH, JSON.stringify({ brokers: {}, teamsStats: {} }, null, 4));
-    }
-    try { 
-        const data = fs.readFileSync(DB_PATH, 'utf8');
-        const parsed = JSON.parse(data || '{"brokers":{},"teamsStats":{}}');
-        if (!parsed.teamsStats) parsed.teamsStats = {};
-        return parsed;
-    } catch (e) { 
-        return { brokers: {}, teamsStats: {} }; 
-    }
-}
 function saveRatingToDB(brokerId, treatment, speed, ticketOwner = "عضو غير محدد", ticketReason = "لا يوجد سبب") {
     const db = getDatabase();
     if (!db.brokers[brokerId]) {
