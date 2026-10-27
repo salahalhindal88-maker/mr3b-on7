@@ -1,7 +1,10 @@
-require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Partials, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, StringSelectMenuBuilder, AuditLogEvent } = require('discord.js');
 const fs = require('fs');
 const config = require('./config.json');
+const token = process.env.DISCORD_TOKEN || config.token;
+if (!token) {
+    throw new Error('Missing Discord bot token. Set DISCORD_TOKEN in Railway variables or provide config.json locally.');
+}
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -631,4 +634,7 @@ client.on('interactionCreate', async (interaction) => {
     if (customId && customId.startsWith('secfinal_')) { try { const cleanFinal = customId.replace('secfinal_', ''); const firstUnder = cleanFinal.indexOf('_'); const treatmentResult = cleanFinal.slice(0, firstUnder); const restText = cleanFinal.slice(firstUnder + 1); const secondUnder = restText.indexOf('_'); const speedResult = restText.slice(0, secondUnder); const idKey = restText.substring(secondUnder + 1); const tData = tempRatings.get(`secure_data_${idKey}`); if (!tData || tData.votedUsers.includes(interaction.user.id)) return; let treatArabic = treatmentResult === 'excellent' ? 'ممتاز' : treatmentResult === 'good' ? 'جيد' : 'سيئ'; let speedArabic = speedResult === 'excellent' ? 'ممتاز' : speedResult === 'good' ? 'جيد' : 'سيئ'; const cleanBrokerId = tData.takenBy.replace(/\\D/g, ''); saveRatingToDB(cleanBrokerId, treatArabic, speedArabic, `<@${interaction.user.id}>`, `${tData.ticketName}`); tData.votedUsers.push(interaction.user.id); tempRatings.set(`secure_data_${idKey}`, tData); tempRatings.delete(`active_${tData.ticketChannelId}`); try { await interaction.channel.send({ content: `📢 | 🎫 العضو <@${interaction.user.id}> قام بتقديم تقييمه للوسيط بنجاح! ✅` }); } catch (e) {} const publicEvalChannel = interaction.guild.channels.cache.find(c => c.name.includes('تقييم') && c.name.includes('الوسطاء')); if (publicEvalChannel) { await publicEvalChannel.send({ embeds: [new EmbedBuilder().setColor('#2ecc71').setTitle('🏆 تم تسجيل ونشر تقييم جديد للعملية الناجحة').addFields({ name: '👑 الوسيط المسؤول:', value: tData.takenBy, inline: true }, { name: '👤 العضو صاحب التقييم:', value: `<@${interaction.user.id}>`, inline: true }, { name: '💬 تقييم التعامل:', value: `\\\`${treatArabic}\\\``, inline: true }, { name: '⚡ تقييم السرعة:', value: `\\\`${speedArabic}\\\``, inline: true }).setTimestamp()] }); } return interaction.update({ content: '✅ **بيض الله وجهك!** تم إرسال مراجعكتك بنجاح!', components: [] }); } catch (error) {} }
 });
 
-client.login(config.token);
+client.login(token).catch(error => {
+    console.error('Failed to log in to Discord:', error);
+    process.exitCode = 1;
+});
